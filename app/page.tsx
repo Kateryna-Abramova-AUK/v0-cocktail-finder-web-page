@@ -1,12 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Navigation } from "@/components/navigation"
-import { HeroSection } from "@/components/hero-section"
+import { SearchBar } from "@/components/search-bar"
 import { CocktailGrid } from "@/components/cocktail-grid"
-import { FilterToggle } from "@/components/filter-toggle"
 import { CocktailModal } from "@/components/cocktail-modal"
-import { FavoritesPage } from "@/components/favorites-page"
+import { FilterToggle } from "@/components/filter-toggle"
+import { Heart, Sparkles } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 export interface Cocktail {
   idDrink: string
@@ -23,11 +23,6 @@ export interface Cocktail {
   strIngredient8?: string
   strIngredient9?: string
   strIngredient10?: string
-  strIngredient11?: string
-  strIngredient12?: string
-  strIngredient13?: string
-  strIngredient14?: string
-  strIngredient15?: string
   strMeasure1?: string
   strMeasure2?: string
   strMeasure3?: string
@@ -38,96 +33,30 @@ export interface Cocktail {
   strMeasure8?: string
   strMeasure9?: string
   strMeasure10?: string
-  strMeasure11?: string
-  strMeasure12?: string
-  strMeasure13?: string
-  strMeasure14?: string
-  strMeasure15?: string
   strAlcoholic?: string
-  strCategory?: string
-  strGlass?: string
 }
 
 export default function CocktailFinder() {
-  // State management
   const [cocktails, setCocktails] = useState<Cocktail[]>([])
   const [selectedCocktail, setSelectedCocktail] = useState<Cocktail | null>(null)
   const [loading, setLoading] = useState(false)
   const [favorites, setFavorites] = useState<string[]>([])
   const [alcoholicFilter, setAlcoholicFilter] = useState<"all" | "alcoholic" | "non-alcoholic">("all")
-  const [currentPage, setCurrentPage] = useState<"home" | "favorites">("home")
-  const [trendingCocktails, setTrendingCocktails] = useState<Cocktail[]>([])
-  const [darkMode, setDarkMode] = useState(false)
+  const [showFavorites, setShowFavorites] = useState(false)
 
-  // Load favorites and dark mode preference on mount
+  // Load favorites from localStorage on mount
   useEffect(() => {
     const savedFavorites = localStorage.getItem("cocktail-favorites")
     if (savedFavorites) {
-      try {
-        setFavorites(JSON.parse(savedFavorites))
-      } catch (error) {
-        console.error("Error parsing saved favorites:", error)
-        setFavorites([])
-      }
-    }
-
-    const savedDarkMode = localStorage.getItem("cocktail-dark-mode")
-    if (savedDarkMode) {
-      try {
-        setDarkMode(JSON.parse(savedDarkMode))
-      } catch (error) {
-        console.error("Error parsing dark mode preference:", error)
-        setDarkMode(false)
-      }
-    }
-
-    // Check system preference if no saved preference
-    if (!savedDarkMode && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      setDarkMode(true)
+      setFavorites(JSON.parse(savedFavorites))
     }
   }, [])
 
-  // Save favorites to localStorage
+  // Save favorites to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem("cocktail-favorites", JSON.stringify(favorites))
   }, [favorites])
 
-  // Handle dark mode changes
-  useEffect(() => {
-    localStorage.setItem("cocktail-dark-mode", JSON.stringify(darkMode))
-    if (darkMode) {
-      document.documentElement.classList.add("dark")
-    } else {
-      document.documentElement.classList.remove("dark")
-    }
-  }, [darkMode])
-
-  // Load trending cocktails on mount
-  useEffect(() => {
-    const loadTrendingCocktails = async () => {
-      try {
-        const promises = Array.from({ length: 6 }, () =>
-          fetch("https://www.thecocktaildb.com/api/json/v1/1/random.php")
-            .then((res) => res.json())
-            .catch(() => ({ drinks: null }))
-        )
-        
-        const results = await Promise.all(promises)
-        const trending = results
-          .map((result) => result.drinks?.[0])
-          .filter(Boolean) as Cocktail[]
-        
-        setTrendingCocktails(trending)
-      } catch (error) {
-        console.error("Error loading trending cocktails:", error)
-        setTrendingCocktails([])
-      }
-    }
-
-    loadTrendingCocktails()
-  }, [])
-
-  // Search cocktails function
   const searchCocktails = async (query: string) => {
     if (!query.trim()) {
       setCocktails([])
@@ -135,18 +64,17 @@ export default function CocktailFinder() {
     }
 
     setLoading(true)
+    setShowFavorites(false)
     try {
       // Search by name first
       let response = await fetch(
-        `https://www.thecocktaildb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query.trim())}`
+        `https://www.thecocktaildb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`,
       )
       let data = await response.json()
 
       // If no results by name, try searching by ingredient
       if (!data.drinks) {
-        response = await fetch(
-          `https://www.thecocktaildb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(query.trim())}`
-        )
+        response = await fetch(`https://www.thecocktaildb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(query)}`)
         data = await response.json()
       }
 
@@ -159,18 +87,13 @@ export default function CocktailFinder() {
     }
   }
 
-  // Get random cocktail function
   const getRandomCocktail = async () => {
     setLoading(true)
+    setShowFavorites(false)
     try {
       const response = await fetch("https://www.thecocktaildb.com/api/json/v1/1/random.php")
       const data = await response.json()
-      
-      if (data.drinks && data.drinks[0]) {
-        setCocktails([data.drinks[0]])
-      } else {
-        setCocktails([])
-      }
+      setCocktails(data.drinks || [])
     } catch (error) {
       console.error("Error fetching random cocktail:", error)
       setCocktails([])
@@ -179,98 +102,104 @@ export default function CocktailFinder() {
     }
   }
 
-  // Toggle favorite function
   const toggleFavorite = (cocktailId: string) => {
-    setFavorites((prev) =>
-      prev.includes(cocktailId)
-        ? prev.filter((id) => id !== cocktailId)
-        : [...prev, cocktailId]
-    )
+    setFavorites((prev) => (prev.includes(cocktailId) ? prev.filter((id) => id !== cocktailId) : [...prev, cocktailId]))
   }
 
-  // Filter cocktails based on alcoholic filter
+  const showFavoritesCocktails = async () => {
+    if (favorites.length === 0) return
+
+    setLoading(true)
+    setShowFavorites(true)
+    try {
+      const favoriteCocktails = await Promise.all(
+        favorites.map(async (id) => {
+          const response = await fetch(`https://www.thecocktaildb.com/api/json/v1/1/lookup.php?i=${id}`)
+          const data = await response.json()
+          return data.drinks?.[0]
+        }),
+      )
+      setCocktails(favoriteCocktails.filter(Boolean))
+    } catch (error) {
+      console.error("Error fetching favorite cocktails:", error)
+      setCocktails([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const filteredCocktails = cocktails.filter((cocktail) => {
     if (alcoholicFilter === "all") return true
     if (alcoholicFilter === "alcoholic") return cocktail.strAlcoholic === "Alcoholic"
-    if (alcoholicFilter === "non-alcoholic") {
-      return cocktail.strAlcoholic === "Non alcoholic" || cocktail.strAlcoholic === "Non-alcoholic"
-    }
+    if (alcoholicFilter === "non-alcoholic") return cocktail.strAlcoholic === "Non alcoholic"
     return true
   })
 
-  // Handle view recipe
-  const handleViewRecipe = (cocktail: Cocktail) => {
-    setSelectedCocktail(cocktail)
-  }
-
-  // Close modal
-  const closeModal = () => {
-    setSelectedCocktail(null)
-  }
-
   return (
-  <div className="min-h-screen bg-background text-foreground">
-      <Navigation
-        currentPage={currentPage}
-        onPageChange={setCurrentPage}
-        favoritesCount={favorites.length}
-        darkMode={darkMode}
-        onToggleDarkMode={() => setDarkMode(!darkMode)}
-      />
+    <div className="min-h-screen gradient-bg">
+      <nav className="sticky top-0 z-50 glass-effect border-b border-border/50 shadow-sm">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Sparkles className="w-8 h-8 text-chart-1" />
+              <h1 className="text-2xl font-bold text-foreground">Cocktail Finder</h1>
+            </div>
+            <Button
+              variant="ghost"
+              className="flex items-center space-x-2 px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
+              onClick={showFavoritesCocktails}
+              disabled={favorites.length === 0}
+            >
+              <Heart className={`w-5 h-5 ${favorites.length > 0 ? "text-red-500" : ""}`} />
+              <span className="hidden sm:inline">Favorites ({favorites.length})</span>
+            </Button>
+          </div>
+        </div>
+      </nav>
 
-      <main>
-        {currentPage === "home" ? (
-          <>
-            <HeroSection
-              onSearch={searchCocktails}
-              onRandomCocktail={getRandomCocktail}
-              loading={loading}
-              trendingCocktails={trendingCocktails}
+      <main className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto space-y-8">
+          <div className="text-center space-y-6 animate-fade-in">
+            <div className="space-y-4">
+              <h2 className="text-4xl md:text-6xl font-bold text-foreground text-balance leading-tight">
+                Discover Amazing
+                <span className="text-chart-1 block">Cocktails</span>
+              </h2>
+              <p className="text-muted-foreground text-lg md:text-xl max-w-2xl mx-auto text-pretty">
+                Search by name or ingredient to find your perfect drink. Explore thousands of cocktail recipes from
+                around the world.
+              </p>
+            </div>
+
+            <div className="max-w-2xl mx-auto animate-slide-in">
+              <SearchBar onSearch={searchCocktails} onRandomCocktail={getRandomCocktail} loading={loading} />
+            </div>
+          </div>
+
+          {cocktails.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 animate-fade-in">
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-muted-foreground">
+                  {showFavorites
+                    ? `Showing ${favorites.length} favorites`
+                    : `Found ${filteredCocktails.length} cocktails`}
+                </span>
+              </div>
+              <FilterToggle value={alcoholicFilter} onChange={setAlcoholicFilter} />
+            </div>
+          )}
+
+          {/* Results */}
+          <div className="animate-fade-in">
+            <CocktailGrid
+              cocktails={filteredCocktails}
               favorites={favorites}
               onToggleFavorite={toggleFavorite}
-              onViewRecipe={handleViewRecipe}
+              onViewRecipe={setSelectedCocktail}
+              loading={loading}
             />
-
-            {/* Results Section */}
-            {cocktails.length > 0 && (
-              <section className="container mx-auto px-4 py-12">
-                <div className="max-w-6xl mx-auto space-y-8">
-                  {/* Filter Controls */}
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 bg-card/50 backdrop-blur-sm rounded-xl border border-border/50">
-                    <div className="flex items-center gap-4">
-                      <h2 className="text-lg font-semibold text-foreground">
-                        Search Results
-                      </h2>
-                      <span className="text-sm text-muted-foreground px-3 py-1 bg-muted/50 rounded-full">
-                        {filteredCocktails.length} cocktail{filteredCocktails.length !== 1 ? "s" : ""} found
-                      </span>
-                    </div>
-
-                    <FilterToggle
-                      value={alcoholicFilter}
-                      onChange={setAlcoholicFilter}
-                    />
-                  </div>
-
-                  {/* Cocktail Grid */}
-                  <CocktailGrid
-                    cocktails={filteredCocktails}
-                    favorites={favorites}
-                    onToggleFavorite={toggleFavorite}
-                    onViewRecipe={handleViewRecipe}
-                    loading={loading}
-                  />
-                </div>
-              </section>
-            )}
-          </>
-        ) : (
-          <FavoritesPage
-            favorites={favorites}
-            onToggleFavorite={toggleFavorite}
-            onViewRecipe={handleViewRecipe}
-          />
-        )}
+          </div>
+        </div>
       </main>
 
       {/* Recipe Modal */}
@@ -278,7 +207,7 @@ export default function CocktailFinder() {
         <CocktailModal
           cocktail={selectedCocktail}
           isOpen={!!selectedCocktail}
-          onClose={closeModal}
+          onClose={() => setSelectedCocktail(null)}
         />
       )}
     </div>
